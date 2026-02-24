@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Everest Admin Control Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .stat-card { transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // ============================================================================
+        // CONFIGURATION
+        // ============================================================================
+        const API_BASE = 'http://localhost:4000';
+        const FIREBASE_API_KEY = 'AIzaSyBmm__dbqiKQN4rVN6Wt1vbx_DZVft2G2g'; // Replace with your key
+
+        // ============================================================================
+        // MAIN APP
+        // ============================================================================
+        function AdminApp() {
+            const [token, setToken] = useState(localStorage.getItem('adminToken') || '');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [loggedIn, setLoggedIn] = useState(false);
+            const [currentView, setCurrentView] = useState('dashboard');
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                if (token) {
+                    setLoggedIn(true);
+                }
+            }, [token]);
+
+            const login = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password, returnSecureToken: true })
+                    });
+                    const data = await res.json();
+                    if (data.idToken) {
+                        setToken(data.idToken);
+                        localStorage.setItem('adminToken', data.idToken);
+                        setLoggedIn(true);
+                    } else {
+                        alert('Login failed: ' + (data.error?.message || 'Check your credentials'));
+                    }
+                } catch (err) {
+                    alert('Login error: ' + err.message);
+                }
+                setLoading(false);
+            };
+
+            const logout = () => {
+                setToken('');
+                localStorage.removeItem('adminToken');
+                setLoggedIn(false);
+            };
+
+            if (!loggedIn) {
+                return <LoginScreen email={email} setEmail={setEmail} password={password} setPassword={setPassword} login={login} loading={loading} />;
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <Navbar currentView={currentView} setCurrentView={setCurrentView} logout={logout} />
+                    <div className="max-w-7xl mx-auto px-4 py-6">
+                        {currentView === 'dashboard' && <Dashboard token={token} />}
+                        {currentView === 'users' && <UserManagement token={token} />}
+                        {currentView === 'trades' && <TradeModeration token={token} />}
+                        {currentView === 'features' && <FeatureFlags token={token} />}
+                        {currentView === 'analytics' && <Analytics token={token} />}
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // LOGIN SCREEN
+        // ============================================================================
+        function LoginScreen({ email, setEmail, password, setPassword, login, loading }) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl w-96">
+                        <div className="text-center mb-8">
+                            <div className="text-6xl mb-4">🏔️</div>
+                            <h1 className="text-3xl font-bold text-gray-900">Everest Admin</h1>
+                            <p className="text-gray-500 mt-2">Control Center</p>
+                        </div>
+                        <input
+                            type="email"
+                            placeholder="Admin Email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:ring-2 focus:ring-black focus:border-transparent"
+                            onKeyPress={e => e.key === 'Enter' && login()}
+                        />
+                        <input
+                            type="password"
+                            placeholder="Password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-black focus:border-transparent"
+                            onKeyPress={e => e.key === 'Enter' && login()}
+                        />
+                        <button
+                            onClick={login}
+                            disabled={loading}
+                            className="w-full bg-black text-white p-3 rounded-lg font-semibold hover:bg-gray-800 disabled:opacity-50 transition"
+                        >
+                            {loading ? 'Authenticating...' : 'Login'}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // NAVBAR
+        // ============================================================================
+        function Navbar({ currentView, setCurrentView, logout }) {
+            const navItems = [
+                { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+                { id: 'users', icon: '👥', label: 'Users' },
+                { id: 'trades', icon: '📈', label: 'Trades' },
+                { id: 'features', icon: '🎛️', label: 'Features' },
+                { id: 'analytics', icon: '📉', label: 'Analytics' }
+            ];
+
+            return (
+                <nav className="bg-white shadow-md border-b border-gray-200">
+                    <div className="max-w-7xl mx-auto px-4">
+                        <div className="flex justify-between items-center py-4">
+                            <div className="flex items-center space-x-8">
+                                <h1 className="text-2xl font-bold">🏔️ Everest Admin</h1>
+                                <div className="flex space-x-1">
+                                    {navItems.map(item => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => setCurrentView(item.id)}
+                                            className={`px-4 py-2 rounded-lg font-medium transition ${
+                                                currentView === item.id
+                                                    ? 'bg-black text-white'
+                                                    : 'text-gray-600 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            <span className="mr-2">{item.icon}</span>
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <button
+                                onClick={logout}
+                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition"
+                            >
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </nav>
+            );
+        }
+
+        // ============================================================================
+        // DASHBOARD
+        // ============================================================================
+        function Dashboard({ token }) {
+            const [stats, setStats] = useState(null);
+            const [recentActions, setRecentActions] = useState([]);
+            const [topTraders, setTopTraders] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                loadDashboard();
+            }, []);
+
+            const loadDashboard = async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/dashboard`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        setStats(data.stats);
+                        setRecentActions(data.recentActions);
+                        setTopTraders(data.topTraders || []);
+                    }
+                } catch (err) {
+                    console.error('Dashboard load failed:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) return <LoadingSpinner />;
+
+            return (
+                <div className="space-y-6">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-4 gap-4">
+                        <StatCard title="Total Users" value={stats?.total_users} icon="👥" color="blue" />
+                        <StatCard title="New Users (7d)" value={stats?.new_users_week} icon="✨" color="green" />
+                        <StatCard title="Total Trades" value={stats?.total_trades} icon="📈" color="purple" />
+                        <StatCard title="New Trades (7d)" value={stats?.new_trades_week} icon="🔥" color="orange" />
+                        <StatCard title="Verified Users" value={stats?.verified_users} icon="✓" color="blue" />
+                        <StatCard title="Suspended" value={stats?.suspended_users} icon="⏸️" color="orange" />
+                        <StatCard title="Banned" value={stats?.banned_users} icon="🚫" color="red" />
+                        <StatCard title="Total Follows" value={stats?.total_follows} icon="💚" color="green" />
+                    </div>
+
+                    {/* Recent Admin Actions */}
+                    <div className="bg-white rounded-xl shadow-md p-6">
+                        <h2 className="text-xl font-bold mb-4">Recent Admin Actions</h2>
+                        <div className="space-y-2">
+                            {recentActions.slice(0, 10).map(action => (
+                                <div key={action.id} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg">
+                                    <div className="flex items-center space-x-3">
+                                        <span className="text-2xl">{getActionIcon(action.action)}</span>
+                                        <div>
+                                            <div className="font-medium">{formatAction(action.action)}</div>
+                                            <div className="text-sm text-gray-500">by @{action.admin_username}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-gray-400">{formatDate(action.created_at)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Top Traders */}
+                    {topTraders.length > 0 && (
+                        <div className="bg-white rounded-xl shadow-md p-6">
+                            <h2 className="text-xl font-bold mb-4">Top Traders</h2>
+                            <div className="space-y-2">
+                                {topTraders.map((trader, idx) => (
+                                    <div key={trader.public_id} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="text-lg font-bold text-gray-400">#{idx + 1}</div>
+                                            <div>
+                                                <div className="flex items-center space-x-2">
+                                                    <span className="font-medium">@{trader.username}</span>
+                                                    {trader.is_verified && <span className="text-blue-500">✓</span>}
+                                                </div>
+                                                <div className="text-sm text-gray-500">
+                                                    {trader.total_trades} trades • {trader.win_rate?.toFixed(1)}% win rate
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="font-medium">{trader.follower_count} followers</div>
+                                            <div className={`text-sm ${trader.total_profit_loss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {trader.total_profit_loss >= 0 ? '+' : ''}{trader.total_profit_loss?.toFixed(2)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // USER MANAGEMENT
+        // ============================================================================
+        function UserManagement({ token }) {
+            const [searchQuery, setSearchQuery] = useState('');
+            const [searchResults, setSearchResults] = useState([]);
+            const [selectedUser, setSelectedUser] = useState(null);
+            const [userDetails, setUserDetails] = useState(null);
+            const [loading, setLoading] = useState(false);
+
+            const searchUsers = async () => {
+                if (!searchQuery) return;
+                setLoading(true);
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/users/search?q=${encodeURIComponent(searchQuery)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) setSearchResults(data.users);
+                } catch (err) {
+                    console.error('Search failed:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const loadUserDetails = async (userId) => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) setUserDetails(data);
+                } catch (err) {
+                    console.error('Load user failed:', err);
+                }
+            };
+
+            const suspendUser = async (userId) => {
+                const reason = prompt('Reason for suspension:');
+                if (!reason) return;
+                const hours = prompt('Duration in hours (leave empty for indefinite):', '24');
+                
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/users/${userId}/suspend`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ reason, durationHours: hours ? parseInt(hours) : null })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('✅ User suspended');
+                        setSelectedUser(null);
+                        setUserDetails(null);
+                    } else {
+                        alert('❌ Failed: ' + data.error);
+                    }
+                } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                }
+            };
+
+            const banUser = async (userId) => {
+                const reason = prompt('Reason for permanent ban:');
+                if (!reason) return;
+                if (!confirm('⚠️ Are you sure? This is PERMANENT.')) return;
+                
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/users/${userId}/ban`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ reason })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('✅ User banned permanently');
+                        setSelectedUser(null);
+                        setUserDetails(null);
+                    } else {
+                        alert('❌ Failed: ' + data.error);
+                    }
+                } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                }
+            };
+
+            const verifyUser = async (userId) => {
+                const reason = prompt('Reason for verification:');
+                
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/users/${userId}/verify`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ reason, badgeType: 'verified' })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('✅ User verified');
+                        setSelectedUser(null);
+                        setUserDetails(null);
+                    } else {
+                        alert('❌ Failed: ' + data.error);
+                    }
+                } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                }
+            };
+
+            const unsuspendUser = async (userId) => {
+                if (!confirm('Unsuspend this user?')) return;
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/users/${userId}/unsuspend`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) alert('✅ User unsuspended');
+                } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-white rounded-xl shadow-md p-6">
+                        <h2 className="text-xl font-bold mb-4">Search Users</h2>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Search by username, email, or name..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                onKeyPress={e => e.key === 'Enter' && searchUsers()}
+                                className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                            />
+                            <button
+                                onClick={searchUsers}
+                                disabled={loading}
+                                className="px-6 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 disabled:opacity-50"
+                            >
+                                {loading ? 'Searching...' : 'Search'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {searchResults.length > 0 && (
+                        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                            {searchResults.map(user => (
+                                <div key={user.public_id} className="p-4 border-b last:border-b-0 hover:bg-gray-50 flex justify-between items-center">
+                                    <div>
+                                        <div className="flex items-center space-x-2">
+                                            <span className="font-semibold">@{user.username}</span>
+                                            {user.is_verified && <span className="text-blue-500">✓</span>}
+                                            {user.is_suspended && <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">SUSPENDED</span>}
+                                            {user.is_banned && <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded">BANNED</span>}
+                                        </div>
+                                        <div className="text-sm text-gray-500">
+                                            {user.email} • {user.follower_count} followers • {user.total_trades || 0} trades
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedUser(user);
+                                            loadUserDetails(user.public_id);
+                                        }}
+                                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
+                                    >
+                                        Manage
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {selectedUser && (
+                        <UserDetailsModal
+                            user={selectedUser}
+                            details={userDetails}
+                            onClose={() => {
+                                setSelectedUser(null);
+                                setUserDetails(null);
+                            }}
+                            onSuspend={suspendUser}
+                            onBan={banUser}
+                            onVerify={verifyUser}
+                            onUnsuspend={unsuspendUser}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // USER DETAILS MODAL
+        // ============================================================================
+        function UserDetailsModal({ user, details, onClose, onSuspend, onBan, onVerify, onUnsuspend }) {
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+                    <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h2 className="text-2xl font-bold">@{user.username}</h2>
+                                <p className="text-gray-500">{user.email}</p>
+                            </div>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                        </div>
+
+                        {details && (
+                            <div className="space-y-6">
+                                {/* Stats */}
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <div className="text-sm text-gray-500">Followers</div>
+                                        <div className="text-2xl font-bold">{details.user.follower_count}</div>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <div className="text-sm text-gray-500">Total Trades</div>
+                                        <div className="text-2xl font-bold">{details.user.total_trades || 0}</div>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <div className="text-sm text-gray-500">Win Rate</div>
+                                        <div className="text-2xl font-bold">{details.user.win_rate?.toFixed(1) || 0}%</div>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="space-y-2">
+                                    <h3 className="font-bold">Actions</h3>
+                                    {!user.is_verified && (
+                                        <button onClick={() => onVerify(user.public_id)} className="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium">
+                                            ✓ Grant Verified Badge
+                                        </button>
+                                    )}
+                                    {user.is_suspended ? (
+                                        <button onClick={() => onUnsuspend(user.public_id)} className="w-full p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">
+                                            ▶️ Unsuspend User
+                                        </button>
+                                    ) : (
+                                        <button onClick={() => onSuspend(user.public_id)} className="w-full p-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium">
+                                            ⏸️ Suspend User
+                                        </button>
+                                    )}
+                                    {!user.is_banned && (
+                                        <button onClick={() => onBan(user.public_id)} className="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium">
+                                            🚫 Ban Permanently
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Moderation History */}
+                                {details.moderationHistory && details.moderationHistory.length > 0 && (
+                                    <div>
+                                        <h3 className="font-bold mb-2">Moderation History</h3>
+                                        <div className="space-y-2">
+                                            {details.moderationHistory.map((mod, idx) => (
+                                                <div key={idx} className="p-3 bg-gray-50 rounded-lg text-sm">
+                                                    <div className="font-medium">{mod.action.toUpperCase()}</div>
+                                                    <div className="text-gray-600">{mod.reason}</div>
+                                                    <div className="text-gray-400 text-xs mt-1">
+                                                        by @{mod.admin_username} • {formatDate(mod.created_at)}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <button onClick={onClose} className="w-full mt-6 p-3 bg-gray-200 rounded-lg font-medium hover:bg-gray-300">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // TRADE MODERATION
+        // ============================================================================
+        function TradeModeration({ token }) {
+            const [trades, setTrades] = useState([]);
+            const [showHidden, setShowHidden] = useState(false);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                loadTrades();
+            }, [showHidden]);
+
+            const loadTrades = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/trades?hidden=${showHidden}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) setTrades(data.trades);
+                } catch (err) {
+                    console.error('Load trades failed:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const hideTrade = async (tradeId) => {
+                const reason = prompt('Reason for hiding this trade:');
+                if (!reason) return;
+                
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/trades/${tradeId}/hide`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ reason })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('✅ Trade hidden');
+                        loadTrades();
+                    }
+                } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                }
+            };
+
+            const unhideTrade = async (tradeId) => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/trades/${tradeId}/unhide`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('✅ Trade unhidden');
+                        loadTrades();
+                    }
+                } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                }
+            };
+
+            if (loading) return <LoadingSpinner />;
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-white rounded-xl shadow-md p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold">Trade Moderation</h2>
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={showHidden}
+                                    onChange={e => setShowHidden(e.target.checked)}
+                                    className="w-5 h-5"
+                                />
+                                <span className="font-medium">Show Hidden Only</span>
+                            </label>
+                        </div>
+
+                        <div className="space-y-2">
+                            {trades.map(trade => (
+                                <div key={trade.id} className={`p-4 border rounded-lg ${trade.is_hidden ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="flex items-center space-x-2">
+                                                <span className="font-bold text-lg">{trade.symbol}</span>
+                                                <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                                                    trade.side === 'buy' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                                }`}>
+                                                    {trade.side.toUpperCase()}
+                                                </span>
+                                                {trade.is_hidden && <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">HIDDEN</span>}
+                                            </div>
+                                            <div className="text-sm text-gray-600 mt-1">
+                                                @{trade.username} • {trade.quantity} shares @ ${trade.entry_price}
+                                            </div>
+                                            {trade.profit_loss !== null && (
+                                                <div className={`text-sm font-medium ${trade.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    P&L: {trade.profit_loss >= 0 ? '+' : ''}${trade.profit_loss.toFixed(2)}
+                                                </div>
+                                            )}
+                                            <div className="text-xs text-gray-400 mt-1">{formatDate(trade.created_at)}</div>
+                                        </div>
+                                        <div>
+                                            {trade.is_hidden ? (
+                                                <button
+                                                    onClick={() => unhideTrade(trade.id)}
+                                                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium text-sm"
+                                                >
+                                                    Unhide
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => hideTrade(trade.id)}
+                                                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium text-sm"
+                                                >
+                                                    Hide
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // FEATURE FLAGS
+        // ============================================================================
+        function FeatureFlags({ token }) {
+            const [features, setFeatures] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                loadFeatures();
+            }, []);
+
+            const loadFeatures = async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/features`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) setFeatures(data.features);
+                } catch (err) {
+                    console.error('Load features failed:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const toggleFeature = async (flagName, currentEnabled) => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/features/${flagName}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ enabled: !currentEnabled })
+                    });
+                    const data = await res.json();
+                    if (data.success) loadFeatures();
+                } catch (err) {
+                    alert('Failed to toggle feature');
+                }
+            };
+
+            if (loading) return <LoadingSpinner />;
+
+            return (
+                <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                    <div className="p-6 border-b">
+                        <h2 className="text-xl font-bold">Feature Flags</h2>
+                        <p className="text-sm text-gray-500 mt-1">Control feature rollouts across the platform</p>
+                    </div>
+                    <div>
+                        {features.map(feature => (
+                            <div key={feature.id} className="p-4 border-b last:border-b-0 hover:bg-gray-50 flex justify-between items-center">
+                                <div className="flex-1">
+                                    <div className="font-semibold text-lg">{feature.flag_name.replace(/_/g, ' ').toUpperCase()}</div>
+                                    <div className="text-sm text-gray-500">{feature.description}</div>
+                                    <div className="text-xs text-gray-400 mt-1">Rollout: {feature.rollout_percentage}%</div>
+                                </div>
+                                <button
+                                    onClick={() => toggleFeature(feature.flag_name, feature.enabled)}
+                                    className={`px-6 py-3 rounded-lg font-semibold transition ${
+                                        feature.enabled
+                                            ? 'bg-green-500 text-white hover:bg-green-600'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    {feature.enabled ? '✓ Enabled' : 'Disabled'}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // ANALYTICS
+        // ============================================================================
+        function Analytics({ token }) {
+            return (
+                <div className="bg-white rounded-xl shadow-md p-6">
+                    <h2 className="text-xl font-bold mb-4">Platform Analytics</h2>
+                    <p className="text-gray-500">Coming soon: Charts, graphs, and detailed analytics</p>
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // HELPER COMPONENTS
+        // ============================================================================
+        function StatCard({ title, value, icon, color }) {
+            const colors = {
+                blue: 'from-blue-500 to-blue-600',
+                green: 'from-green-500 to-green-600',
+                orange: 'from-orange-500 to-orange-600',
+                red: 'from-red-500 to-red-600',
+                purple: 'from-purple-500 to-purple-600'
+            };
+
+            return (
+                <div className={`stat-card bg-gradient-to-br ${colors[color]} p-6 rounded-xl shadow-md text-white`}>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <div className="text-sm opacity-90 mb-2">{title}</div>
+                            <div className="text-3xl font-bold">{value || 0}</div>
+                        </div>
+                        <div className="text-4xl opacity-50">{icon}</div>
+                    </div>
+                </div>
+            );
+        }
+
+        function LoadingSpinner() {
+            return (
+                <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+                </div>
+            );
+        }
+
+        // ============================================================================
+        // UTILITY FUNCTIONS
+        // ============================================================================
+        function formatAction(action) {
+            return action.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function getActionIcon(action) {
+            const icons = {
+                'SUSPEND_USER': '⏸️',
+                'BAN_USER': '🚫',
+                'UNSUSPEND_USER': '▶️',
+                'UNBAN_USER': '✅',
+                'GRANT_VERIFIED_BADGE': '✓',
+                'REVOKE_VERIFIED_BADGE': '❌',
+                'HIDE_TRADE': '👁️',
+                'UPDATE_FEATURE_FLAG': '🎛️'
+            };
+            return icons[action] || '•';
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+
+            if (days > 7) return date.toLocaleDateString();
+            if (days > 0) return `${days}d ago`;
+            if (hours > 0) return `${hours}h ago`;
+            if (minutes > 0) return `${minutes}m ago`;
+            return 'Just now';
+        }
+
+        // ============================================================================
+        // RENDER
+        // ============================================================================
+        ReactDOM.render(<AdminApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+#!/bin/bash
+# ============================================================================
+# EVEREST - START IN BACKGROUND
+# Run this and you can close Terminal!
+# ============================================================================
+
+cd ~/Desktop/everest-backend
+
+echo "🏔️  Starting Everest in background..."
+
+# Start server in background
+nohup node server-ultimate.js > everest.log 2>&1 &
+
+# Save the process ID
+echo $! > everest.pid
+
+echo "✅ Everest is now running in background!"
+echo ""
+echo "📱 iOS Backend: http://localhost:3000"
+echo "🖥️  Admin Panel: http://localhost:4000"
+echo ""
+echo "📋 View logs: tail -f ~/Desktop/everest-backend/everest.log"
+echo "🛑 To stop: ./stop-everest.sh"
+echo ""
+echo "You can now close this Terminal window!"

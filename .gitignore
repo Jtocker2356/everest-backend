@@ -1,0 +1,6 @@
+node_modules/
+.env
+everest.log
+everest.pid
+uploads/
+.DS_Store

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Everest Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .stat-card { transition: all 0.2s ease; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Configuration
+        const API_BASE = 'http://localhost:4000';
+        const FIREBASE_API_KEY = 'AIzaSyBmm__dbqiKQN4rVN6Wt1vbx_DZVft2G2g'; // Replace with your key
+
+        // Main App
+        function AdminApp() {
+            const [token, setToken] = useState(localStorage.getItem('adminToken') || '');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [loggedIn, setLoggedIn] = useState(false);
+            const [currentView, setCurrentView] = useState('dashboard');
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                if (token) setLoggedIn(true);
+            }, [token]);
+
+            const login = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password, returnSecureToken: true })
+                    });
+                    const data = await res.json();
+                    if (data.idToken) {
+                        setToken(data.idToken);
+                        localStorage.setItem('adminToken', data.idToken);
+                        setLoggedIn(true);
+                    } else {
+                        alert('Login failed: ' + (data.error?.message || 'Check credentials'));
+                    }
+                } catch (err) {
+                    alert('Login error: ' + err.message);
+                }
+                setLoading(false);
+            };
+
+            const logout = () => {
+                setToken('');
+                localStorage.removeItem('adminToken');
+                setLoggedIn(false);
+            };
+
+            if (!loggedIn) {
+                return <LoginScreen email={email} setEmail={setEmail} password={password} setPassword={setPassword} login={login} loading={loading} />;
+            }
+
+            return (
+                <div className="min-h-screen">
+                    <Navbar currentView={currentView} setCurrentView={setCurrentView} logout={logout} />
+                    <div className="max-w-7xl mx-auto px-6 py-8">
+                        {currentView === 'dashboard' && <Dashboard token={token} />}
+                        {currentView === 'users' && <UserManagement token={token} />}
+                        {currentView === 'trades' && <TradeModeration token={token} />}
+                        {currentView === 'features' && <FeatureFlags token={token} />}
+                    </div>
+                </div>
+            );
+        }
+
+        // Login Screen
+        function LoginScreen({ email, setEmail, password, setPassword, login, loading }) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+                    <div className="glass p-10 rounded-3xl shadow-2xl w-96 border border-white/20">
+                        <div className="text-center mb-8">
+                            <div className="text-6xl mb-4">🏔️</div>
+                            <h1 className="text-3xl font-bold text-gray-900">Everest Admin</h1>
+                            <p className="text-gray-600 mt-2">Control Center</p>
+                        </div>
+                        <input
+                            type="email"
+                            placeholder="Admin Email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            className="w-full p-4 border border-gray-200 rounded-xl mb-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                            onKeyPress={e => e.key === 'Enter' && login()}
+                        />
+                        <input
+                            type="password"
+                            placeholder="Password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            className="w-full p-4 border border-gray-200 rounded-xl mb-4 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                            onKeyPress={e => e.key === 'Enter' && login()}
+                        />
+                        <button
+                            onClick={login}
+                            disabled={loading}
+                            className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 transition shadow-lg"
+                        >
+                            {loading ? 'Authenticating...' : 'Sign In'}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Navbar
+        function Navbar({ currentView, setCurrentView, logout }) {
+            const navItems = [
+                { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+                { id: 'users', icon: '👥', label: 'Users' },
+                { id: 'trades', icon: '📈', label: 'Trades' },
+                { id: 'features', icon: '⚙️', label: 'Features' }
+            ];
+
+            return (
+                <nav className="glass border-b border-gray-200 sticky top-0 z-50">
+                    <div className="max-w-7xl mx-auto px-6">
+                        <div className="flex justify-between items-center py-4">
+                            <div className="flex items-center space-x-8">
+                                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">🏔️ Everest</h1>
+                                <div className="flex space-x-1">
+                                    {navItems.map(item => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => setCurrentView(item.id)}
+                                            className={`px-4 py-2 rounded-lg font-medium transition ${
+                                                currentView === item.id
+                                                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md'
+                                                    : 'text-gray-600 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            <span className="mr-2">{item.icon}</span>
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <button
+                                onClick={logout}
+                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition"
+                            >
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </nav>
+            );
+        }
+
+        // Dashboard
+        function Dashboard({ token }) {
+            const [stats, setStats] = useState(null);
+            const [recentActions, setRecentActions] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                loadDashboard();
+            }, []);
+
+            const loadDashboard = async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/dashboard`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        setStats(data.stats);
+                        setRecentActions(data.recentActions || []);
+                    } else {
+                        console.error('Dashboard load failed:', data.error);
+                    }
+                } catch (err) {
+                    console.error('Dashboard error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) return <LoadingSpinner />;
+
+            const statCards = [
+                { title: "Total Users", value: stats?.total_users || 0, icon: "👥", color: "from-blue-500 to-blue-600", change: `+${stats?.new_users_week || 0} this week` },
+                { title: "Total Trades", value: stats?.total_trades || 0, icon: "📈", color: "from-purple-500 to-purple-600", change: `+${stats?.new_trades_week || 0} this week` },
+                { title: "Verified Users", value: stats?.verified_users || 0, icon: "✓", color: "from-green-500 to-green-600", change: "Active badges" },
+                { title: "Total Follows", value: stats?.total_follows || 0, icon: "💚", color: "from-pink-500 to-pink-600", change: "Connections" }
+            ];
+
+            return (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {statCards.map((card, idx) => (
+                            <div key={idx} className={`stat-card glass p-6 rounded-2xl border border-gray-200`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="text-3xl">{card.icon}</div>
+                                    <div className={`px-3 py-1 rounded-full bg-gradient-to-r ${card.color} text-white text-xs font-semibold`}>
+                                        Live
+                                    </div>
+                                </div>
+                                <h3 className="text-gray-600 text-sm font-medium mb-1">{card.title}</h3>
+                                <p className="text-4xl font-bold text-gray-900 mb-2">{card.value.toLocaleString()}</p>
+                                <p className="text-xs text-gray-500">{card.change}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    {recentActions.length > 0 && (
+                        <div className="glass p-6 rounded-2xl border border-gray-200">
+                            <h2 className="text-xl font-bold mb-4 text-gray-900">Recent Activity</h2>
+                            <div className="space-y-3">
+                                {recentActions.slice(0, 10).map(action => (
+                                    <div key={action.id} className="flex justify-between items-center p-4 hover:bg-gray-50 rounded-xl transition">
+                                        <div className="flex items-center space-x-3">
+                                            <span className="text-2xl">{getActionIcon(action.action)}</span>
+                                            <div>
+                                                <div className="font-medium text-gray-900">{formatAction(action.action)}</div>
+                                                <div className="text-sm text-gray-500">by @{action.admin_username}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-gray-400">{formatDate(action.created_at)}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // User Management (simplified for space)
+        function UserManagement({ token }) {
+            return (
+                <div className="glass p-8 rounded-2xl border border-gray-200 text-center">
+                    <div className="text-6xl mb-4">👥</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">User Management</h2>
+                    <p className="text-gray-600">Search and manage platform users</p>
+                </div>
+            );
+        }
+
+        // Trade Moderation
+        function TradeModeration({ token }) {
+            return (
+                <div className="glass p-8 rounded-2xl border border-gray-200 text-center">
+                    <div className="text-6xl mb-4">📈</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Trade Moderation</h2>
+                    <p className="text-gray-600">Monitor and moderate platform trades</p>
+                </div>
+            );
+        }
+
+        // Feature Flags
+        function FeatureFlags({ token }) {
+            const [features, setFeatures] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                loadFeatures();
+            }, []);
+
+            const loadFeatures = async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/admin/features`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) setFeatures(data.features);
+                } catch (err) {
+                    console.error('Load features error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const toggleFeature = async (flagName, currentEnabled) => {
+                try {
+                    await fetch(`${API_BASE}/api/admin/features/${flagName}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ enabled: !currentEnabled })
+                    });
+                    loadFeatures();
+                } catch (err) {
+                    console.error('Toggle error:', err);
+                }
+            };
+
+            if (loading) return <LoadingSpinner />;
+
+            return (
+                <div className="glass rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="p-6 border-b border-gray-200">
+                        <h2 className="text-2xl font-bold text-gray-900">Feature Flags</h2>
+                        <p className="text-gray-600 mt-1">Control feature rollouts</p>
+                    </div>
+                    <div>
+                        {features.map(feature => (
+                            <div key={feature.id} className="p-6 border-b border-gray-100 hover:bg-gray-50 transition flex justify-between items-center">
+                                <div>
+                                    <h3 className="font-semibold text-lg text-gray-900">{feature.flag_name.replace(/_/g, ' ').toUpperCase()}</h3>
+                                    <p className="text-sm text-gray-500">{feature.description || 'No description'}</p>
+                                </div>
+                                <button
+                                    onClick={() => toggleFeature(feature.flag_name, feature.enabled)}
+                                    className={`px-6 py-3 rounded-xl font-semibold transition shadow-md ${
+                                        feature.enabled
+                                            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    {feature.enabled ? '✓ Enabled' : 'Disabled'}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // Helper Components
+        function LoadingSpinner() {
+            return (
+                <div className="flex items-center justify-center py-20">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                </div>
+            );
+        }
+
+        // Utility Functions
+        function formatAction(action) {
+            return action.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function getActionIcon(action) {
+            const icons = {
+                'SUSPEND_USER': '⏸️', 'BAN_USER': '🚫', 'UNSUSPEND_USER': '▶️',
+                'GRANT_VERIFIED_BADGE': '✓', 'UPDATE_FEATURE_FLAG': '⚙️'
+            };
+            return icons[action] || '•';
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+            
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+            return date.toLocaleDateString();
+        }
+
+        // Render
+        ReactDOM.render(<AdminApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
